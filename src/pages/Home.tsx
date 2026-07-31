@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { PlayerRow } from '@/components/PlayerRow';
 import { UploadArea, type LoadedFiles } from '@/components/UploadArea';
 import { DonateButton } from '@/components/DonateButton';
@@ -22,6 +22,16 @@ export default function Home() {
   const [checkingDeaths, setCheckingDeaths] = useState(false);
   const [checkProgress, setCheckProgress] = useState({ current: 0, total: 0 });
   const [notification, setNotification] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+
+  // Reset to home screen on page refresh
+  useEffect(() => {
+    setData(null);
+    setFiles({ lootCsv: null, bankTsv: null });
+    setSearch('');
+    setTierFilter([]);
+    setGuildFilter([]);
+    setNotification(null);
+  }, []);
 
   const handleParse = () => {
     if (!files.lootCsv) return;
@@ -155,6 +165,11 @@ export default function Home() {
       p.guild.toLowerCase().includes(search.toLowerCase())
     );
 
+    // Apply guild filter — show only selected guild members
+    if (guildFilter.length > 0) {
+      filtered = filtered.filter(p => guildFilter.includes(p.guild));
+    }
+
     switch (sortMode) {
       case 'value':
         filtered.sort((a, b) => b.total_value - a.total_value);
@@ -168,7 +183,7 @@ export default function Home() {
     }
 
     return filtered;
-  }, [data, search, sortMode]);
+  }, [data, search, sortMode, guildFilter]);
 
   const totalValue = useMemo(() => (data || []).reduce((sum, p) => sum + p.total_value, 0), [data]);
   const totalItems = useMemo(() => (data || []).reduce((sum, p) => sum + p.item_count, 0), [data]);
