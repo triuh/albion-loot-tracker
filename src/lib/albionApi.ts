@@ -1,28 +1,32 @@
-// Albion Online GameInfo API client (via Netlify Function proxy)
+// Albion Online GameInfo API client — EUROPE SERVER ONLY
+// Europe (Frankfurt): gameinfo.albiononline.com
 // Docs: https://www.tools4albion.com/api_info.php
 
-const API_BASE = 'https://gameinfo.albiononline.com/api/gameinfo';
+const EU_API_BASE = 'https://gameinfo.albiononline.com/api/gameinfo';
 const PROXY_PATH = '/.netlify/functions/albion-proxy';
 
 // Detect if proxy is available (Netlify Functions) or not (drag-and-drop static deploy)
 let proxyAvailable: boolean | null = null;
 
 async function apiFetch(url: string): Promise<Response> {
-  // If proxy hasn't been tested yet, try it first
   if (proxyAvailable === null) {
     try {
       const test = await fetch(`${PROXY_PATH}?url=${encodeURIComponent(url)}`, { method: 'HEAD' });
       proxyAvailable = test.status !== 404;
-    } catch {
+      console.log(`[AlbionAPI] Proxy test: ${proxyAvailable ? 'AVAILABLE' : 'NOT AVAILABLE'} (status: ${test.status})`);
+    } catch (err) {
+      console.log(`[AlbionAPI] Proxy test failed:`, err);
       proxyAvailable = false;
     }
   }
 
   if (proxyAvailable) {
-    return fetch(`${PROXY_PATH}?url=${encodeURIComponent(url)}`);
+    const proxyUrl = `${PROXY_PATH}?url=${encodeURIComponent(url)}`;
+    console.log(`[AlbionAPI] Using proxy: ${proxyUrl}`);
+    return fetch(proxyUrl);
   }
 
-  // Fallback: direct fetch (will likely fail due to CORS in browser)
+  console.log(`[AlbionAPI] Direct fetch (will likely fail CORS): ${url}`);
   return fetch(url);
 }
 
@@ -58,45 +62,75 @@ export interface AlbionDeath {
 
 export class ProxyUnavailableError extends Error {
   constructor() {
-    super('Albion API proxy is unavailable. Deploy via Netlify CLI to enable death checking.');
+    super('Albion API proxy is unavailable. Deploy via Netlify CLI or GitHub to enable death checking.');
     this.name = 'ProxyUnavailableError';
   }
 }
 
 export async function searchPlayer(name: string): Promise<AlbionPlayer | null> {
+  const url = `${EU_API_BASE}/search?q=${encodeURIComponent(name)}`;
+  console.log(`[AlbionAPI] [EU] Searching player: "${name}"`);
   try {
-    const res = await apiFetch(`${API_BASE}/search?q=${encodeURIComponent(name)}`);
+    const res = await apiFetch(url);
+    console.log(`[AlbionAPI] Search response status: ${res.status}`);
     if (res.status === 404) throw new ProxyUnavailableError();
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.log(`[AlbionAPI] Search failed with status ${res.status}`);
+      return null;
+    }
     const data = await res.json();
     const player = data.players?.find(
       (p: AlbionPlayer) => p.Name.toLowerCase() === name.toLowerCase()
     );
+    if (player) {
+      console.log(`[AlbionAPI] Found player: ${player.Name} (ID: ${player.Id})`);
+    } else {
+      console.log(`[AlbionAPI] Player "${name}" not found in search results`);
+      console.log(`[AlbionAPI] Results:`, data.players?.slice(0, 5).map((p: AlbionPlayer) => p.Name));
+    }
     return player || null;
   } catch (e) {
     if (e instanceof ProxyUnavailableError) throw e;
+    console.error(`[AlbionAPI] Search error for "${name}":`, e);
     return null;
   }
 }
 
 export async function getPlayerDeaths(playerId: string): Promise<AlbionDeath[]> {
+  const url = `${EU_API_BASE}/players/${playerId}/deaths`;
+  console.log(`[AlbionAPI] [EU] Fetching deaths for player ID: ${playerId}`);
   try {
-    const res = await apiFetch(`${API_BASE}/players/${playerId}/deaths`);
+    const res = await apiFetch(url);
     if (res.status === 404) throw new ProxyUnavailableError();
-    if (!res.ok) return [];
-    return await res.json();
+    if (!res.ok) {
+      console.log(`[AlbionAPI] Deaths fetch failed: ${res.status}`);
+      return [];
+    }
+    const deaths = await res.json();
+    console.log(`[AlbionAPI] Found ${deaths.length} deaths`);
+    if (deaths.length > 0) {
+      console.log(`[AlbionAPI] Latest death:`, deaths[0].TimeStamp);
+    }
+    return deaths;
   } catch (e) {
     if (e instanceof ProxyUnavailableError) throw e;
+    console.error(`[AlbionAPI] Deaths error:`, e);
     return [];
   }
 }
 
 export async function getEventDetails(eventId: number): Promise<any | null> {
+  const url = `${EU_API_BASE}/events/${eventId}`;
+  console.log(`[AlbionAPI] [EU] Fetching event details: ${eventId}`);
   try {
-    const res = await apiFetch(`${API_BASE}/events/${eventId}`);
+    const res = await apiFetch(url);
     if (res.status === 404) throw new ProxyUnavailableError();
     if (!res.ok) return null;
-    return await res.json();
+    const data = await res.json();
+    const eq = Object.values(data?.Victim?.Equipment || {}).filter((x: any) => x?.Type).length;
+    const inv = (data?.Victim?.Inventory || []).filter((x: any) => x?.Type).length;
+    console.log(`[AlbionAPI] Event ${eventId}: ${eq} equipment + ${inv} inventory items`);
+    return data;
   } catch (e) {
     if (e instanceof ProxyUnavailableError) throw e;
     return null;
@@ -121,29 +155,36 @@ export function extractLostItemIds(eventDetails: any): Set<string> {
     }
   }
 
+  console.log(`[AlbionAPI] Extracted ${ids.size} lost item IDs:`, Array.from(ids));
   return ids;
 }
 
-// Extract YYYY-MM-DD from ISO timestamp
 function getDatePart(ts: string): string {
   return ts.trim().split(/[T ]/)[0];
 }
 
-// Check deaths that happened within 1 hour after looting,
-// matching by the SAME DATE as the loot (works even if checked a week later)
 export async function checkPlayerDeaths(
   playerName: string,
   items: { item_id: string; timestamp: string }[]
 ): Promise<Set<string>> {
+  console.log(`\n========== [EU] CHECKING DEATHS FOR: ${playerName} ==========`);
+  console.log(`[AlbionAPI] Loot items count: ${items.length}`);
+  console.log(`[AlbionAPI] Loot timestamps:`, items.map(i => i.timestamp));
+
   const lostItemIds = new Set<string>();
 
   const searchResult = await searchPlayer(playerName);
-  if (!searchResult) return lostItemIds;
+  if (!searchResult) {
+    console.log(`[AlbionAPI] ABORT: Player "${playerName}" not found`);
+    return lostItemIds;
+  }
 
   const deaths = await getPlayerDeaths(searchResult.Id);
-  if (!deaths.length) return lostItemIds;
+  if (!deaths.length) {
+    console.log(`[AlbionAPI] ABORT: No deaths found for ${playerName}`);
+    return lostItemIds;
+  }
 
-  // Group loot items by date and collect timestamps
   const lootByDate = new Map<string, number[]>();
   for (const item of items) {
     const date = getDatePart(item.timestamp);
@@ -153,26 +194,39 @@ export async function checkPlayerDeaths(
     lootByDate.get(date)!.push(time);
   }
 
-  if (lootByDate.size === 0) return lostItemIds;
+  console.log(`[AlbionAPI] Loot dates:`, Array.from(lootByDate.keys()));
 
-  // Check each death: same date as loot AND within 1h after any loot on that date
+  if (lootByDate.size === 0) {
+    console.log(`[AlbionAPI] ABORT: No valid loot timestamps`);
+    return lostItemIds;
+  }
+
   for (const death of deaths) {
     const deathTime = new Date(death.TimeStamp).getTime();
     if (isNaN(deathTime)) continue;
 
     const deathDate = getDatePart(death.TimeStamp);
     const lootTimes = lootByDate.get(deathDate);
-    if (!lootTimes) continue; // No loot on this date
 
-    // Check if death is within 1 hour after ANY loot item on this date
+    console.log(`[AlbionAPI] Checking death at ${death.TimeStamp} (date: ${deathDate})`);
+
+    if (!lootTimes) {
+      console.log(`[AlbionAPI]   -> SKIP: No loot on this date`);
+      continue;
+    }
+
     const isRelevant = lootTimes.some((lootTime) => {
       const diffHours = (deathTime - lootTime) / 1000 / 60 / 60;
+      console.log(`[AlbionAPI]   -> Loot at ${new Date(lootTime).toISOString()}, diff: ${diffHours.toFixed(2)}h`);
       return diffHours >= 0 && diffHours <= 1;
     });
 
-    if (!isRelevant) continue;
+    if (!isRelevant) {
+      console.log(`[AlbionAPI]   -> SKIP: Death not within 1h after loot`);
+      continue;
+    }
 
-    // Small delay to avoid rate limiting
+    console.log(`[AlbionAPI]   -> MATCH! Fetching event details...`);
     await new Promise((r) => setTimeout(r, 300));
     const details = await getEventDetails(death.EventId);
     if (details) {
@@ -180,6 +234,9 @@ export async function checkPlayerDeaths(
       ids.forEach((id) => lostItemIds.add(id));
     }
   }
+
+  console.log(`[AlbionAPI] RESULT for ${playerName}: ${lostItemIds.size} lost items`);
+  console.log(`========== END ${playerName} ==========\n`);
 
   return lostItemIds;
 }
