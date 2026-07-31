@@ -9,13 +9,32 @@ const PROXY_PATH = '/.netlify/functions/albion-proxy';
 // Detect if proxy is available (Netlify Functions) or not (drag-and-drop static deploy)
 let proxyAvailable: boolean | null = null;
 
+// Albion API жёстко лимитирует частоту запросов (429), особенно с серверных IP
+// (Netlify): без ретраев часть игроков молча выпадает из проверки
+async function fetchWithRetry(input: string, attempts = 4): Promise<Response> {
+  let delay = 1000;
+  let res: Response | null = null;
+  for (let i = 0; i < attempts; i++) {
+    res = await fetch(input);
+    if (res.status !== 429 && res.status < 500) return res;
+    if (i < attempts - 1) {
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      const waitMs = retryAfter > 0 ? retryAfter * 1000 : delay;
+      console.log(`[AlbionAPI] HTTP ${res.status}, retry in ${waitMs}ms (${i + 1}/${attempts - 1})`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      delay *= 2;
+    }
+  }
+  return res!;
+}
+
 async function apiFetch(url: string): Promise<Response> {
   // Vite dev-сервер (npm run dev): запросы идут через server.proxy из vite.config.ts,
   // т.к. Albion API не отдаёт CORS-заголовки для браузера
   if (import.meta.env.DEV) {
     const devUrl = url.replace('https://gameinfo-ams.albiononline.com', '');
     console.log(`[AlbionAPI] Using Vite dev proxy: ${devUrl}`);
-    return fetch(devUrl);
+    return fetchWithRetry(devUrl);
   }
 
   if (proxyAvailable === null) {
@@ -32,14 +51,14 @@ async function apiFetch(url: string): Promise<Response> {
   if (proxyAvailable) {
     const proxyUrl = `${PROXY_PATH}?url=${encodeURIComponent(url)}`;
     console.log(`[AlbionAPI] Using proxy: ${proxyUrl}`);
-    return fetch(proxyUrl);
+    return fetchWithRetry(proxyUrl);
   }
 
   // Без прокси прямой запрос блокируется CORS — не глотаем это молча,
   // а сообщаем, что проверка в этом режиме недоступна
   try {
     console.log(`[AlbionAPI] Direct fetch (no proxy): ${url}`);
-    return await fetch(url);
+    return await fetchWithRetry(url);
   } catch {
     throw new ProxyUnavailableError();
   }
