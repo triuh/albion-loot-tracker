@@ -25,7 +25,10 @@ export const handler: Handler = async (event) => {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': res.headers.get('Content-Type') || 'application/json',
-        'Cache-Control': 'public, max-age=60',
+        // no-store: edge-кэш Netlify переотдаёт протухшие ответы (fwd=stale),
+        // из-за чего один неполный ответ killboard-API "прилипал" между прогонами
+        'Cache-Control': 'no-store',
+        'Netlify-Vary': 'query',
       },
       body,
     };
