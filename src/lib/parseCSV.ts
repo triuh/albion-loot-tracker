@@ -12,23 +12,8 @@ export function parseLootCSV(
   const delimiter = headerLine.includes(';') ? ';' : ',';
   const headers = headerLine.split(delimiter).map(h => h.trim().replace(/^\uFEFF/, ''));
 
-  // First pass: collect all players who died
-  const playersWhoDied = new Set<string>();
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const values = line.split(delimiter);
-    const row: Record<string, string> = {};
-    for (let j = 0; j < headers.length; j++) {
-      row[headers[j]] = values[j] !== undefined ? values[j].trim() : '';
-    }
-    const died = row['died'] || '';
-    if (died) {
-      playersWhoDied.add(died);
-    }
-  }
-
-  // Second pass: parse loot items
+  // Parse loot items. isLost \u043F\u0440\u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043F\u043E\u0437\u0436\u0435 \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \u00ABCheck deaths\u00BB
+  // (\u043F\u043E killboard: \u0441\u043C\u0435\u0440\u0442\u044C \u0432 \u043E\u043A\u043D\u0435 timestamp_utc..+1h \u0441 \u044D\u0442\u0438\u043C \u043F\u0440\u0435\u0434\u043C\u0435\u0442\u043E\u043C)
   const playersMap = new Map<string, { itemsMap: Map<string, LootItem>; total_value: number; total_items: number }>();
 
   for (let i = 1; i < lines.length; i++) {
@@ -60,7 +45,6 @@ export function parseLootCSV(
     const tierMatch = itemId.match(/^T(\d+)_/);
     const tier = tierMatch ? parseInt(tierMatch[1], 10) : 0;
 
-    const isLost = playersWhoDied.has(player);
     const depositedCount = bankLog ? findDeposited(bankLog, player, itemName) : 0;
 
     if (!playersMap.has(player)) {
@@ -74,9 +58,6 @@ export function parseLootCSV(
       existing.total_value += totalValue;
       if (timestamp > existing.timestamp) {
         existing.timestamp = timestamp;
-      }
-      if (isLost) {
-        existing.isLost = true;
       }
       if (depositedCount > 0) {
         existing.depositedCount += depositedCount;
@@ -94,7 +75,7 @@ export function parseLootCSV(
         killed_by: killedBy,
         guild,
         alliance,
-        isLost,
+        isLost: false,
         depositedCount,
         tier,
       });

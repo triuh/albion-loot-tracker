@@ -9,6 +9,13 @@ export default defineConfig({
   plugins: [inspectAttr(), react()],
   server: {
     port: 3000,
+    // Локальный прокси к Albion API (EU): браузер не может ходить туда напрямую из-за CORS
+    proxy: {
+      '/api/gameinfo': {
+        target: 'https://gameinfo-ams.albiononline.com',
+        changeOrigin: true,
+      },
+    },
   },
   resolve: {
     alias: {
