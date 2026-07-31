@@ -61,7 +61,7 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
   const clearBank = () => onFilesChange({ ...files, bankTsv: null });
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-3">
       <input ref={lootInputRef} type="file" accept=".csv" className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -89,10 +89,10 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
         }}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Loot CSV — left side */}
         <Card
-          className={`border-2 border-dashed transition-all cursor-pointer bg-[#111] min-h-[320px] ${
+          className={`border-2 border-dashed transition-all cursor-pointer bg-[#111] min-h-[160px] ${
             files.lootCsv ? 'border-emerald-600' : isDragging ? 'border-amber-500 bg-amber-950/20' : 'border-gray-700 hover:border-gray-500'
           }`}
           onDragOver={handleDragOver}
@@ -100,22 +100,22 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
           onDrop={handleDrop}
           onClick={() => lootInputRef.current?.click()}
         >
-          <CardContent className="p-10 text-center flex flex-col items-center justify-center min-h-[320px]">
+          <CardContent className="p-6 text-center flex flex-col items-center justify-center min-h-[160px]">
             {files.lootCsv ? (
-              <div className="space-y-4">
-                <FileText className="w-14 h-14 mx-auto text-emerald-500" />
-                <p className="font-medium text-gray-300 text-lg truncate">{files.lootCsv.filename}</p>
-                <p className="text-base text-emerald-500">{t('loot_loaded')}</p>
-                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-300 h-9"
+              <div className="space-y-2">
+                <FileText className="w-10 h-10 mx-auto text-emerald-500" />
+                <p className="font-medium text-gray-300 text-base truncate">{files.lootCsv.filename}</p>
+                <p className="text-sm text-emerald-500">{t('loot_loaded')}</p>
+                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-300 h-8 text-xs"
                   onClick={(e) => { e.stopPropagation(); clearLoot(); }}>
-                  <X className="w-4 h-4 mr-1" />{t('change')}
+                  <X className="w-3 h-3 mr-1" />{t('change')}
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <Upload className="w-14 h-14 mx-auto text-gray-600" />
-                <p className="font-medium text-gray-300 text-xl">{t('upload_loot_log')}</p>
-                <p className="text-base text-gray-500">{t('drag_or_click')}</p>
+              <div className="space-y-2">
+                <Upload className="w-10 h-10 mx-auto text-gray-600" />
+                <p className="font-medium text-gray-300 text-lg">{t('upload_loot_log')}</p>
+                <p className="text-sm text-gray-500">{t('drag_or_click')}</p>
               </div>
             )}
           </CardContent>
@@ -123,7 +123,7 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
 
         {/* Bank TSV — right side */}
         <Card
-          className={`border-2 border-dashed transition-all cursor-pointer bg-[#111] min-h-[320px] ${
+          className={`border-2 border-dashed transition-all cursor-pointer bg-[#111] min-h-[160px] ${
             files.bankTsv ? 'border-blue-600' : isDragging ? 'border-amber-500 bg-amber-950/20' : 'border-gray-700 hover:border-gray-500'
           }`}
           onDragOver={handleDragOver}
@@ -131,22 +131,22 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
           onDrop={handleDrop}
           onClick={() => bankInputRef.current?.click()}
         >
-          <CardContent className="p-10 text-center flex flex-col items-center justify-center min-h-[320px]">
+          <CardContent className="p-6 text-center flex flex-col items-center justify-center min-h-[160px]">
             {files.bankTsv ? (
-              <div className="space-y-4">
-                <FileText className="w-14 h-14 mx-auto text-blue-500" />
-                <p className="font-medium text-gray-300 text-lg truncate">{files.bankTsv.filename}</p>
-                <p className="text-base text-blue-500">{t('bank_loaded')}</p>
-                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-300 h-9"
+              <div className="space-y-2">
+                <FileText className="w-10 h-10 mx-auto text-blue-500" />
+                <p className="font-medium text-gray-300 text-base truncate">{files.bankTsv.filename}</p>
+                <p className="text-sm text-blue-500">{t('bank_loaded')}</p>
+                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-300 h-8 text-xs"
                   onClick={(e) => { e.stopPropagation(); clearBank(); }}>
-                  <X className="w-4 h-4 mr-1" />{t('change')}
+                  <X className="w-3 h-3 mr-1" />{t('change')}
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
-                <Upload className="w-14 h-14 mx-auto text-gray-600" />
-                <p className="font-medium text-gray-300 text-xl">{t('upload_bank_log')}</p>
-                <p className="text-base text-gray-500">{t('bank_log_optional')}</p>
+              <div className="space-y-2">
+                <Upload className="w-10 h-10 mx-auto text-gray-600" />
+                <p className="font-medium text-gray-300 text-lg">{t('upload_bank_log')}</p>
+                <p className="text-sm text-gray-500">{t('bank_log_optional')}</p>
               </div>
             )}
           </CardContent>
@@ -161,7 +161,7 @@ export function UploadArea({ files, onFilesChange, onParse }: UploadAreaProps) {
         >
           {t('analyze')}
         </Button>
-        {!canParse && <p className="text-xs text-gray-500 mt-2">{t('upload_required')}</p>}
+        {!canParse && <p className="text-xs text-gray-500 mt-1">{t('upload_required')}</p>}
       </div>
     </div>
   );

@@ -181,9 +181,9 @@ export default function Home() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#0d0d0d] text-gray-200 flex flex-col">
-        <header className="border-b border-gray-800 bg-[#111]">
-          <div className="max-w-7xl mx-auto px-6 py-5">
+      <div className="h-screen overflow-hidden bg-[#0d0d0d] text-gray-200 flex flex-col">
+        <header className="border-b border-gray-800 bg-[#111] shrink-0">
+          <div className="max-w-7xl mx-auto px-6 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button onClick={handleReset} className="p-0 bg-transparent border-0 cursor-pointer hover:opacity-80 transition-opacity">
@@ -220,16 +220,30 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <main className="flex-1 flex items-center justify-center px-6">
-          <div className="w-full max-w-5xl space-y-8">
-            <div className="text-center space-y-3">
-              <Shield className="w-16 h-16 mx-auto text-gray-700" />
-              <h2 className="text-xl font-semibold text-gray-300">{t('analyzer_title')}</h2>
-              <p className="text-base text-gray-500">
+        <main className="flex-1 flex flex-col items-center justify-center px-6 overflow-hidden">
+          <div className="w-full max-w-5xl space-y-2">
+            <div className="text-center space-y-1">
+              <Shield className="w-10 h-10 mx-auto text-gray-700" />
+              <h2 className="text-lg font-semibold text-gray-300">{t('analyzer_title')}</h2>
+              <p className="text-sm text-gray-500">
                 {t('upload_description')}
               </p>
             </div>
             <UploadArea files={files} onFilesChange={setFiles} onParse={handleParse} />
+            {/* Discord footer */}
+            <div className="text-center pt-1">
+              <p className="text-sm text-gray-500">
+                {lang === 'ru' ? 'По вопросам рекламы и предложениям:' : 'For advertising and suggestions:'}{' '}
+                <a
+                  href="https://discord.com/users/1100160532960518285"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-400 hover:text-indigo-300 hover:underline font-medium"
+                >
+                  Discord
+                </a>
+              </p>
+            </div>
           </div>
         </main>
       </div>
