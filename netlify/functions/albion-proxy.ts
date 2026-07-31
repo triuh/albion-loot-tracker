@@ -12,7 +12,12 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const res = await fetch(targetUrl);
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'AlbionOnline/1.0',
+        'Accept': 'application/json',
+      },
+    });
     const body = await res.text();
 
     return {
