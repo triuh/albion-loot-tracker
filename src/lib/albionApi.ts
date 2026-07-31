@@ -1,14 +1,23 @@
 // Albion Online GameInfo API client — EUROPE SERVER ONLY
-// Europe (Frankfurt): gameinfo.albiononline.com
+// Europe (Amsterdam): gameinfo-ams.albiononline.com
+// (gameinfo.albiononline.com — это сервер Americas, там другие персонажи!)
 // Docs: https://www.tools4albion.com/api_info.php
 
-const EU_API_BASE = 'https://gameinfo.albiononline.com/api/gameinfo';
+const EU_API_BASE = 'https://gameinfo-ams.albiononline.com/api/gameinfo';
 const PROXY_PATH = '/.netlify/functions/albion-proxy';
 
 // Detect if proxy is available (Netlify Functions) or not (drag-and-drop static deploy)
 let proxyAvailable: boolean | null = null;
 
 async function apiFetch(url: string): Promise<Response> {
+  // Vite dev-сервер (npm run dev): запросы идут через server.proxy из vite.config.ts,
+  // т.к. Albion API не отдаёт CORS-заголовки для браузера
+  if (import.meta.env.DEV) {
+    const devUrl = url.replace('https://gameinfo-ams.albiononline.com', '');
+    console.log(`[AlbionAPI] Using Vite dev proxy: ${devUrl}`);
+    return fetch(devUrl);
+  }
+
   if (proxyAvailable === null) {
     try {
       const test = await fetch(`${PROXY_PATH}?url=${encodeURIComponent(url)}`, { method: 'HEAD' });
@@ -26,8 +35,14 @@ async function apiFetch(url: string): Promise<Response> {
     return fetch(proxyUrl);
   }
 
-  console.log(`[AlbionAPI] Direct fetch (will likely fail CORS): ${url}`);
-  return fetch(url);
+  // Без прокси прямой запрос блокируется CORS — не глотаем это молча,
+  // а сообщаем, что проверка в этом режиме недоступна
+  try {
+    console.log(`[AlbionAPI] Direct fetch (no proxy): ${url}`);
+    return await fetch(url);
+  } catch {
+    throw new ProxyUnavailableError();
+  }
 }
 
 export interface AlbionPlayer {
@@ -137,16 +152,10 @@ export async function getEventDetails(eventId: number): Promise<any | null> {
   }
 }
 
+// Только ИНВЕНТАРЬ жертвы: залутанное лежит в сумке.
+// Equipment не смотрим — это собственная одежда игрока, она даёт ложные совпадения.
 export function extractLostItemIds(eventDetails: any): Set<string> {
   const ids = new Set<string>();
-
-  const equipment = eventDetails?.Victim?.Equipment || {};
-  for (const [, item] of Object.entries(equipment)) {
-    const it = item as any;
-    if (it && it.Type) {
-      ids.add(it.Type);
-    }
-  }
 
   const inventory = eventDetails?.Victim?.Inventory || [];
   for (const item of inventory) {
@@ -155,12 +164,20 @@ export function extractLostItemIds(eventDetails: any): Set<string> {
     }
   }
 
-  console.log(`[AlbionAPI] Extracted ${ids.size} lost item IDs:`, Array.from(ids));
+  console.log(`[AlbionAPI] Extracted ${ids.size} lost item IDs (inventory only):`, Array.from(ids));
   return ids;
 }
 
-function getDatePart(ts: string): string {
-  return ts.trim().split(/[T ]/)[0];
+// Окно поиска смерти: от времени лута (timestamp_utc) до +1 часа
+const DEATH_WINDOW_MS = 60 * 60 * 1000;
+
+// timestamp_utc из файла может быть без таймзоны ("2026-07-29 12:00:12") —
+// new Date() распарсил бы его как локальное время, поэтому явно считаем UTC
+export function parseUtcMs(ts: string): number {
+  if (!ts) return NaN;
+  let s = ts.trim().replace(' ', 'T');
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)) s += 'Z';
+  return new Date(s).getTime();
 }
 
 export async function checkPlayerDeaths(
@@ -169,7 +186,6 @@ export async function checkPlayerDeaths(
 ): Promise<Set<string>> {
   console.log(`\n========== [EU] CHECKING DEATHS FOR: ${playerName} ==========`);
   console.log(`[AlbionAPI] Loot items count: ${items.length}`);
-  console.log(`[AlbionAPI] Loot timestamps:`, items.map(i => i.timestamp));
 
   const lostItemIds = new Set<string>();
 
@@ -185,53 +201,36 @@ export async function checkPlayerDeaths(
     return lostItemIds;
   }
 
-  const lootByDate = new Map<string, number[]>();
-  for (const item of items) {
-    const date = getDatePart(item.timestamp);
-    const time = new Date(item.timestamp).getTime();
-    if (isNaN(time)) continue;
-    if (!lootByDate.has(date)) lootByDate.set(date, []);
-    lootByDate.get(date)!.push(time);
-  }
+  const lootItems = items
+    .map((it) => ({ id: it.item_id, time: parseUtcMs(it.timestamp) }))
+    .filter((it) => !isNaN(it.time));
 
-  console.log(`[AlbionAPI] Loot dates:`, Array.from(lootByDate.keys()));
-
-  if (lootByDate.size === 0) {
+  if (!lootItems.length) {
     console.log(`[AlbionAPI] ABORT: No valid loot timestamps`);
     return lostItemIds;
   }
 
   for (const death of deaths) {
-    const deathTime = new Date(death.TimeStamp).getTime();
+    const deathTime = parseUtcMs(death.TimeStamp);
     if (isNaN(deathTime)) continue;
 
-    const deathDate = getDatePart(death.TimeStamp);
-    const lootTimes = lootByDate.get(deathDate);
-
-    console.log(`[AlbionAPI] Checking death at ${death.TimeStamp} (date: ${deathDate})`);
-
-    if (!lootTimes) {
-      console.log(`[AlbionAPI]   -> SKIP: No loot on this date`);
-      continue;
-    }
-
-    const isRelevant = lootTimes.some((lootTime) => {
-      const diffHours = (deathTime - lootTime) / 1000 / 60 / 60;
-      console.log(`[AlbionAPI]   -> Loot at ${new Date(lootTime).toISOString()}, diff: ${diffHours.toFixed(2)}h`);
-      return diffHours >= 0 && diffHours <= 1;
+    // Предметы, залутанные в пределах часа ДО этой смерти
+    const relevant = lootItems.filter((it) => {
+      const diff = deathTime - it.time;
+      return diff >= 0 && diff <= DEATH_WINDOW_MS;
     });
 
-    if (!isRelevant) {
-      console.log(`[AlbionAPI]   -> SKIP: Death not within 1h after loot`);
-      continue;
-    }
+    console.log(`[AlbionAPI] Death at ${death.TimeStamp}: ${relevant.length} loot items in window`);
+    if (!relevant.length) continue;
 
     console.log(`[AlbionAPI]   -> MATCH! Fetching event details...`);
     await new Promise((r) => setTimeout(r, 300));
     const details = await getEventDetails(death.EventId);
-    if (details) {
-      const ids = extractLostItemIds(details);
-      ids.forEach((id) => lostItemIds.add(id));
+    if (!details) continue;
+
+    const droppedIds = extractLostItemIds(details);
+    for (const it of relevant) {
+      if (droppedIds.has(it.id)) lostItemIds.add(it.id);
     }
   }
 

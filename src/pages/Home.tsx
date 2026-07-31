@@ -128,8 +128,8 @@ export default function Home() {
       setNotification({
         type: 'error',
         message: lang === 'ru'
-          ? 'Проверка смертей недоступна в статическом режиме. Используйте Netlify CLI для деплоя.'
-          : 'Death checking unavailable in static mode. Use Netlify CLI to deploy.',
+          ? 'Не удалось обратиться к Albion API: нет прокси. Локально запускайте через npm run dev, на проде — деплой на Netlify (не статикой).'
+          : 'Cannot reach Albion API: no proxy. Locally use npm run dev; in production deploy to Netlify (not as static files).',
       });
     } else if (lostCount > 0) {
       setNotification({
