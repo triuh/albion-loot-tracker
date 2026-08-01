@@ -4,10 +4,12 @@
 // Docs: https://www.tools4albion.com/api_info.php
 
 const EU_API_BASE = 'https://gameinfo-ams.albiononline.com/api/gameinfo';
-const PROXY_PATH = '/.netlify/functions/albion-proxy';
+// Прокси-функция: Vercel (/api/...) или Netlify (/.netlify/functions/...) —
+// клиент сам определяет, какая доступна на текущем хостинге
+const PROXY_PATHS = ['/api/albion-proxy', '/.netlify/functions/albion-proxy'];
 
-// Detect if proxy is available (Netlify Functions) or not (drag-and-drop static deploy)
-let proxyAvailable: boolean | null = null;
+// null = прокси нет (статический деплой), undefined = ещё не проверяли
+let detectedProxyPath: string | null | undefined = undefined;
 
 // Albion API жёстко лимитирует частоту запросов (429), особенно с серверных IP
 // (Netlify): без ретраев часть игроков молча выпадает из проверки
@@ -37,19 +39,24 @@ async function apiFetch(url: string): Promise<Response> {
     return fetchWithRetry(devUrl);
   }
 
-  if (proxyAvailable === null) {
-    try {
-      const test = await fetch(`${PROXY_PATH}?url=${encodeURIComponent(url)}`, { method: 'HEAD' });
-      proxyAvailable = test.status !== 404;
-      console.log(`[AlbionAPI] Proxy test: ${proxyAvailable ? 'AVAILABLE' : 'NOT AVAILABLE'} (status: ${test.status})`);
-    } catch (err) {
-      console.log(`[AlbionAPI] Proxy test failed:`, err);
-      proxyAvailable = false;
+  if (detectedProxyPath === undefined) {
+    detectedProxyPath = null;
+    for (const path of PROXY_PATHS) {
+      try {
+        const test = await fetch(`${path}?url=${encodeURIComponent(url)}`, { method: 'HEAD' });
+        if (test.status !== 404) {
+          detectedProxyPath = path;
+          break;
+        }
+      } catch {
+        // пробуем следующий путь
+      }
     }
+    console.log(`[AlbionAPI] Proxy detect: ${detectedProxyPath ?? 'NOT AVAILABLE'}`);
   }
 
-  if (proxyAvailable) {
-    const proxyUrl = `${PROXY_PATH}?url=${encodeURIComponent(url)}`;
+  if (detectedProxyPath) {
+    const proxyUrl = `${detectedProxyPath}?url=${encodeURIComponent(url)}`;
     console.log(`[AlbionAPI] Using proxy: ${proxyUrl}`);
     return fetchWithRetry(proxyUrl);
   }
