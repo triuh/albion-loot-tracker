@@ -23,15 +23,35 @@ export default function Home() {
   const [checkProgress, setCheckProgress] = useState({ current: 0, total: 0 });
   const [notification, setNotification] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
-  // Reset to home screen on page refresh
+  // Load saved data from localStorage on mount
   useEffect(() => {
-    setData(null);
-    setFiles({ lootCsv: null, bankTsv: null });
-    setSearch('');
-    setTierFilter([]);
-    setGuildFilter([]);
-    setNotification(null);
+    const saved = localStorage.getItem('albion-loot-data');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.data) setData(parsed.data);
+        if (parsed.guildFilter) setGuildFilter(parsed.guildFilter);
+        if (parsed.tierFilter) setTierFilter(parsed.tierFilter);
+        if (parsed.search) setSearch(parsed.search);
+        if (parsed.notification) setNotification(parsed.notification);
+      } catch (e) {
+        console.error('Failed to load saved data:', e);
+      }
+    }
   }, []);
+
+  // Save data to localStorage whenever it changes
+  useEffect(() => {
+    if (data) {
+      localStorage.setItem('albion-loot-data', JSON.stringify({
+        data,
+        guildFilter,
+        tierFilter,
+        search,
+        notification,
+      }));
+    }
+  }, [data, guildFilter, tierFilter, search]);
 
   const handleParse = () => {
     if (!files.lootCsv) return;
@@ -53,6 +73,7 @@ export default function Home() {
     setTierFilter([]);
     setGuildFilter([]);
     setNotification(null);
+    localStorage.removeItem('albion-loot-data');
   };
 
   const toggleTier = (tier: number) => {

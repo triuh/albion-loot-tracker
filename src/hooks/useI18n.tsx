@@ -85,13 +85,13 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
 };
 
 const I18nContext = createContext<I18nContextType>({
-  lang: 'ru',
+  lang: 'en',
   setLang: () => {},
   t: (key: string) => key,
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('ru');
+  const [lang, setLangState] = useState<Lang>('en');
 
   const setLang = useCallback((newLang: Lang) => {
     setLangState(newLang);
